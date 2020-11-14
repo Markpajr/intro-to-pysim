@@ -17,12 +17,11 @@ RUN_TIME_MINUTES = 10
 REPLICATIONS = 1
 
 
-class AirPort(object):
+class AirPort:
     def __init__(self, env):
         self.env = env
         self.boarding_check = simpy.Resource(env, capacity=BOARDING_CHECK_WORKERS)
-        self.personal_check_scanner = [simpy.Resource(env, capacity=1)for _ in range(PERSONAL_CHECK_SCANNERS + 1)]
-        self.passenger_wait_times = []
+        self.personal_check_scanner = [simpy.Resource(env, capacity=1) for _ in range(PERSONAL_CHECK_SCANNERS + 1)]
 
     def boarding_check_service_time(self):
         yield self.env.timeout(np.random.exponential(1 / BOARDING_CHECK_SERVICE_RATE))
@@ -31,33 +30,42 @@ class AirPort(object):
         yield self.env.timeout(np.random.uniform(PERSONAL_CHECK_SERVICE_RATE["min_scan"],
                                                  PERSONAL_CHECK_SERVICE_RATE["max_scan"]))
 
-    def store_wait_times(self, wait_time):
-        self.passenger_wait_times.append(wait_time)
 
+class Passenger:
+    def __init__(self, name, airport):
+        self.name = name
+        self.airport = airport
 
-def passenger(env, name, airport):
-    arrival_time = round(airport.env.now, 2)
-    print(f'Passenger {name} Arrives to Boarding Check at {arrival_time} minutes')
-    with airport.boarding_check.request() as request:
-        print(f"Boarding Check QUEUE SIZE:", len(airport.boarding_check.queue))
-        yield request
-        yield env.process(airport.boarding_check_service_time())
-        boarding_departure_time = round(airport.env.now, 2)
-        print(f'Passenger {name} Departs Boarding Check at {boarding_departure_time} minutes')
-    personal_check_arrival_time = round(airport.env.now, 2)
-    print(f'Passenger {name} Arrives to Personal Check at {personal_check_arrival_time} minutes')
+    def go_to_airport(self):
+        print(f'Passenger {self.name} Arrives to Boarding Check at {round(self.airport.env.now, 2)} minutes')
+        yield from self._create_process_dispose(self.airport.boarding_check)
 
-    minq = 0
-    for i in range(1, PERSONAL_CHECK_SCANNERS + 1):
-        if len(airport.personal_check_scanner[i].queue) < len(airport.personal_check_scanner[minq].queue):
-            minq = i
-    with airport.personal_check_scanner[minq].request() as request:
-        yield request
-        yield env.process(airport.personal_check_service_time())
-        personal_check_departure_time = round(airport.env.now, 2)
-        print(f'Passenger {name} Departs Personal Check at {personal_check_departure_time} minutes')
-        wait_time = (personal_check_departure_time - arrival_time)
-        airport.store_wait_times(round(wait_time, 2))
+        print(f'Passenger {self.name} Arrives to Personal Check Scanner at {round(self.airport.env.now, 2)} minutes')
+        available_scanner = self._decision_block()  # Decision block to determine which scanner to go to
+        yield from self._create_process_dispose(self.airport.personal_check_scanner[available_scanner])
+
+    def _create_process_dispose(self, resource):
+        service_name, service_time = self._determine_resource(resource)
+        with resource.request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (dispose)
+            print(f"{service_name} QUEUE SIZE:", len(resource.queue))
+            yield request  # Entity Requests Resource (create)
+            yield env.process(service_time)  # Resource is Serving the Entity (process)
+            print(f'Passenger {self.name} Departs {service_name} at {round(self.airport.env.now, 2)} minutes')
+
+    def _determine_resource(self, resource):
+        service_name = "Personal Check Scanner"
+        service_time = self.airport.personal_check_service_time()
+        if resource == self.airport.boarding_check:
+            service_name = "Boarding Check"
+            service_time = self.airport.boarding_check_service_time()
+        return service_name, service_time
+
+    def _decision_block(self):
+        minq = 0
+        for i in range(1, PERSONAL_CHECK_SCANNERS + 1):
+            if len(self.airport.personal_check_scanner[i].queue) < len(self.airport.personal_check_scanner[minq].queue):
+                minq = i
+        return minq
 
 
 def passenger_generator(env):
@@ -65,7 +73,8 @@ def passenger_generator(env):
     airport = AirPort(env)
     while True:
         yield env.timeout(np.random.exponential(PASSENGERS_PER_MINUTE))
-        env.process(passenger(env, passenger_name, airport))
+        passenger = Passenger(passenger_name, airport)
+        env.process(passenger.go_to_airport())
         passenger_name += 1
 
 
