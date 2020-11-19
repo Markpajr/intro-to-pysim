@@ -6,15 +6,15 @@ BOARDING_CHECK_WORKERS = 1
 PERSONAL_CHECK_SCANNERS = 1
 
 # Defining Arrival Rate
-PASSENGERS_PER_MINUTE = 5
+PASSENGERS_PER_MINUTE = 50
 
 # Defining Service Rates
 BOARDING_CHECK_SERVICE_RATE = 0.75
 PERSONAL_CHECK_SERVICE_RATE = {"min_scan": 0.5, "max_scan": 1}
 
 # Defining Simulation Variables
-RUN_TIME_MINUTES = 10
-REPLICATIONS = 1
+RUN_TIME_MINUTES = 720
+REPLICATIONS = 5
 
 # Variables for Output Analysis
 boarding_check_wait_times = []
@@ -49,7 +49,7 @@ class Passenger:
 
     def go_to_airport(self):
         yield from self._create_process_dispose(self.airport.boarding_check)
-        available_scanner = self._decision_block  # Decision block to determine which scanner to go to
+        available_scanner = self._decision_block()  # Decision block to determine which scanner to go to
         yield from self._create_process_dispose(self.airport.personal_check_scanner[available_scanner])
 
     def _create_process_dispose(self, resource):
@@ -57,15 +57,11 @@ class Passenger:
         print(f"ARRIVAL: Passenger {self.name} Arrives to {service_name} @ {self.arrival_time} minutes")
         with resource.request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (dispose)
             yield request  # Entity Requests Resource (create)
-            if service_name == "Personal Check Scanner":
-                personal_check_wait_times.append(self.airport.env.now - self.arrival_time)
-            else:
-                boarding_check_wait_times.append(self.airport.env.now - self.arrival_time)
+            self._calculate_resource_wait_times(service_name)
             print(f"SERVICED: Passenger {self.name} is being served @ {round(self.airport.env.now, 2)} minutes")
             yield env.process(service_time)  # Resource is Serving the Entity (process)
             print(f"DEPARTURE: Passenger {self.name} Departs {service_name} @ {round(self.airport.env.now, 2)} minutes")
-            if service_name == "Personal Check Scanner":
-                time_in_system.append(self.airport.env.now - self.arrival_time)
+            self._calculate_system_times(service_name)
 
     def _determine_resource(self, resource):
         service_name = "Personal Check Scanner"
@@ -75,13 +71,22 @@ class Passenger:
             service_time = self.airport.boarding_check_service_time()
         return service_name, service_time
 
-    @property
     def _decision_block(self):
         minq = 0
         for i in range(1, PERSONAL_CHECK_SCANNERS + 1):
             if len(self.airport.personal_check_scanner[i].queue) < len(self.airport.personal_check_scanner[minq].queue):
                 minq = i
         return minq
+
+    def _calculate_resource_wait_times(self, service_name):
+        if service_name == "Personal Check Scanner":
+            personal_check_wait_times.append(self.airport.env.now - self.arrival_time)
+        else:
+            boarding_check_wait_times.append(self.airport.env.now - self.arrival_time)
+
+    def _calculate_system_times(self, service_name):
+        if service_name == "Personal Check Scanner":
+            time_in_system.append(self.airport.env.now - self.arrival_time)
 
 
 def passenger_generator(env):
@@ -104,13 +109,12 @@ for i in range(1, REPLICATIONS + 1):
     env.process(passenger_generator(env))
     env.run(until=RUN_TIME_MINUTES)
 
-    # print(f"REPLICATION {i} Boarding Check Wait Time: {np.mean(boarding_check_wait_times) / REPLICATIONS, 2)} Minutes")
-    # print(f"Average Personal Check Wait Time: {round(np.mean(personal_check_wait_times) / REPLICATIONS, 2)} Minutes")
-    # print(f"Average Time in System: {round(np.mean(time_in_system) / REPLICATIONS, 2)} Minutes")
 
 print("---------------------Output Analysis-----------------------")
 average_wait_times = (np.mean(boarding_check_wait_times) + np.mean(personal_check_wait_times)) / 2
-print(f"Average Boarding Check Wait Time: {round(np.mean(boarding_check_wait_times)/REPLICATIONS, 2)} Minutes")
-print(f"Average Personal Check Wait Time: {round(np.mean(personal_check_wait_times)/REPLICATIONS, 2)} Minutes")
-print(f"Average Total Wait Time: {round(average_wait_times / REPLICATIONS, 2)} Minutes")
-print(f"Average Time in System: {round(np.mean(time_in_system)/REPLICATIONS, 2)} Minutes")
+print(f"Average Rep Boarding Check Wait Time: {round(np.mean(boarding_check_wait_times), 2)} Minutes")
+print(f"Average Rep Personal Check Wait Time: {round(np.mean(personal_check_wait_times), 2)} Minutes")
+print(f"Average Rep Total Wait Time: {round(average_wait_times, 2)} Minutes")
+print(f"Average Rep Time in System: {round(np.mean(time_in_system), 2)} Minutes")
+
+# print(f"Average Time in System: {boarding_check_wait_times} Minutes")
