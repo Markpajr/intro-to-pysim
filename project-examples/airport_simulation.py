@@ -2,11 +2,11 @@ import simpy
 import numpy as np
 
 # Defining Resources
-BOARDING_CHECK_WORKERS = 1
-PERSONAL_CHECK_SCANNERS = 1
+BOARDING_CHECK_WORKERS = 4
+PERSONAL_CHECK_SCANNERS = 4
 
 # Defining Arrival Rate
-PASSENGERS_PER_MINUTE = 50
+PASSENGERS_PER_MINUTE = 5
 
 # Defining Service Rates
 BOARDING_CHECK_SERVICE_RATE = 0.75
@@ -54,13 +54,13 @@ class Passenger:
 
     def _create_process_dispose(self, resource):
         service_name, service_time = self._determine_resource(resource)
-        print(f"ARRIVAL: Passenger {self.name} Arrives to {service_name} @ {self.arrival_time} minutes")
+        #print(f"ARRIVAL: Passenger {self.name} Arrives to {service_name} @ {self.arrival_time} minutes")
         with resource.request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (dispose)
             yield request  # Entity Requests Resource (create)
             self._calculate_resource_wait_times(service_name)
-            print(f"SERVICED: Passenger {self.name} is being served @ {round(self.airport.env.now, 2)} minutes")
+            #print(f"SERVICED: Passenger {self.name} is being served @ {round(self.airport.env.now, 2)} minutes")
             yield env.process(service_time)  # Resource is Serving the Entity (process)
-            print(f"DEPARTURE: Passenger {self.name} Departs {service_name} @ {round(self.airport.env.now, 2)} minutes")
+            #print(f"DEPARTURE: Passenger {self.name} Departs {service_name} @ {round(self.airport.env.now, 2)} minutes")
             self._calculate_system_times(service_name)
 
     def _determine_resource(self, resource):
@@ -94,7 +94,7 @@ def passenger_generator(env):
     passenger_name = 1
     airport = AirPort(env)
     while True:
-        yield env.timeout(np.random.exponential(1/PASSENGERS_PER_MINUTE))
+        yield env.timeout(np.random.exponential(PASSENGERS_PER_MINUTE))
         passenger = Passenger(passenger_name, airport)
         env.process(passenger.go_to_airport())
         passenger_name += 1
@@ -111,10 +111,26 @@ for i in range(1, REPLICATIONS + 1):
 
 
 print("---------------------Output Analysis-----------------------")
+BCW_min,BCW_max = min(boarding_check_wait_times), max(boarding_check_wait_times)
+PCW_min,PCW_max = min(personal_check_wait_times), max(personal_check_wait_times)
+BCW_quartiles = np.percentile(boarding_check_wait_times, [25, 50, 75])
+PCW_quartiles = np.percentile(personal_check_wait_times, [25,50,75])
+BCW_avg = round(np.mean(boarding_check_wait_times), 2)
+PCW_avg = round(np.mean(personal_check_wait_times), 2)
+
+summary_cols = ['Average','Min','Q1','Median','Q3','Max']
+row_labels = ['Boarding Check Wait','Personal Check Wait']
+
+summary_data = np.round(np.array([[BCW_avg,BCW_min,BCW_quartiles[0],BCW_quartiles[1],BCW_quartiles[2],BCW_max],
+                         [PCW_avg,PCW_min,PCW_quartiles[0],PCW_quartiles[1],PCW_quartiles[2],PCW_max]]),2)
+
+row_format ="{:>19}" * (len(summary_cols)+1)
+print(row_format.format("Time in Min", *summary_cols))
+for row_label, row_data in zip(row_labels, summary_data):
+    print(row_format.format(row_label, *row_data))
+
 average_wait_times = (np.mean(boarding_check_wait_times) + np.mean(personal_check_wait_times)) / 2
-print(f"Average Rep Boarding Check Wait Time: {round(np.mean(boarding_check_wait_times), 2)} Minutes")
-print(f"Average Rep Personal Check Wait Time: {round(np.mean(personal_check_wait_times), 2)} Minutes")
+#print(f"Average Rep Boarding Check Wait Time: {round(np.mean(boarding_check_wait_times), 2)} Minutes")
+#print(f"Average Rep Personal Check Wait Time: {round(np.mean(personal_check_wait_times), 2)} Minutes")
 print(f"Average Rep Total Wait Time: {round(average_wait_times, 2)} Minutes")
 print(f"Average Rep Time in System: {round(np.mean(time_in_system), 2)} Minutes")
-
-# print(f"Average Time in System: {boarding_check_wait_times} Minutes")
