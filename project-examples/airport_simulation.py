@@ -1,5 +1,6 @@
 import simpy
 import numpy as np
+from tabulate import tabulate
 
 # Defining Resources
 BOARDING_CHECK_WORKERS = 1
@@ -126,26 +127,17 @@ for i in range(1, REPLICATIONS + 1):
 
 
 print("---------------------Output Analysis-----------------------")
-# BCW_min,BCW_max = min(boarding_check_wait_times), max(boarding_check_wait_times)
-# PCW_min,PCW_max = min(personal_check_wait_times), max(personal_check_wait_times)
-# BCW_quartiles = np.percentile(boarding_check_wait_times, [25, 50, 75])
-# PCW_quartiles = np.percentile(personal_check_wait_times, [25,50,75])
-# BCW_avg = round(np.mean(boarding_check_wait_times), 2)
-# PCW_avg = round(np.mean(personal_check_wait_times), 2)
-#
-# summary_cols = ['Average','Min','Q1','Median','Q3','Max']
-# row_labels = ['Boarding Check Wait','Personal Check Wait']
-#
-# summary_data = np.round(np.array([[BCW_avg,BCW_min,BCW_quartiles[0],BCW_quartiles[1],BCW_quartiles[2],BCW_max],
-#                          [PCW_avg,PCW_min,PCW_quartiles[0],PCW_quartiles[1],PCW_quartiles[2],PCW_max]]),2)
-#
-# row_format ="{:>19}" * (len(summary_cols)+1)
-# print(row_format.format("Time in Min", *summary_cols))
-# for row_label, row_data in zip(row_labels, summary_data):
-#     print(row_format.format(row_label, *row_data))
+headers = ['Avg Boarding Check Wait Time',
+           'Avg Personal Check Wait Time',
+           'Avg Total Wait Time',
+           'Avg Rep Time in System']
 
 average_wait_times = (np.mean(boarding_check_wait_times) + np.mean(personal_check_wait_times)) / 2
-print(f"Average Rep Boarding Check Wait Time: {round(np.mean(boarding_check_wait_times), 2)} Minutes")
-print(f"Average Rep Personal Check Wait Time: {round(np.mean(personal_check_wait_times), 2)} Minutes")
-print(f"Average Rep Total Wait Time: {round(average_wait_times, 2)} Minutes")
-print(f"Average Rep Time in System: {round(np.mean(time_in_system), 2)} Minutes")
+data = np.array([
+    round(np.mean(boarding_check_wait_times), 2),
+    round(np.mean(personal_check_wait_times), 2),
+    round(average_wait_times, 2),
+    round(np.mean(time_in_system), 2)
+])
+
+print(tabulate([data], headers, tablefmt="fancy_grid"))
