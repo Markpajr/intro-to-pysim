@@ -14,12 +14,14 @@ BOARDING_CHECK_SERVICE_RATE = 0.75
 PERSONAL_CHECK_SERVICE_RATE = {"min_scan": 0.5, "max_scan": 1}
 
 # Defining Simulation Variables
-RUN_TIME_MINUTES = 720
-REPLICATIONS = 10
+RUN_TIME_MINUTES = 10
+REPLICATIONS = 1
 
 # Variables for Output Analysis
 boarding_check_wait_times = []
+boarding_check_service_times = []
 personal_check_wait_times = []
+personal_check_service_times = []
 time_in_system = []
 total_passengers = 0
 
@@ -40,6 +42,7 @@ class AirPort:
 
 class Passenger:
     global boarding_check_wait_times
+    global boarding_check_wait_times
     global personal_check_wait_times
     global time_in_system
 
@@ -49,60 +52,25 @@ class Passenger:
         self.arrival_time = round(self.airport.env.now, 2)
 
     def go_to_airport(self):
-        # print(f"ARRIVAL: Passenger {self.name} Arrives to Boarding Check @ {self.arrival_time} minutes")
         with self.airport.boarding_check.request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (dispose)
             yield request  # Entity Requests Resource (create)
-            # print(f"SERVICED: Passenger {self.name} is being served @ {round(self.airport.env.now, 2)} minutes")
             boarding_check_wait_times.append(round(self.airport.env.now, 2) - self.arrival_time)
             yield env.process(self.airport.boarding_check_service_time())  # Resource is Serving the Entity (process)
-            # print(f"DEPARTURE: Passenger {self.name} Departs Boarding Check @ {round(self.airport.env.now, 2)} minutes")
 
         available_scanner = self._decision_block()  # Decision block to determine which scanner to go to
         personal_check_arrival = round(self.airport.env.now, 2)
-        # print(f"ARRIVAL: Passenger {self.name} Arrives to Personal Check Scanner @ {personal_check_arrival} minutes")
         with self.airport.personal_check_scanner[available_scanner].request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (dispose)
             yield request  # Entity Requests Resource (create)
-            # print(f"SERVICED: Passenger {self.name} is being served @ {round(self.airport.env.now, 2)} minutes")
             personal_check_wait_times.append(round(self.airport.env.now, 2) - personal_check_arrival)
             yield env.process(self.airport.personal_check_service_time())  # Resource is Serving the Entity (process)
-            # print(f"DEPARTURE: Passenger {self.name} Departs Personal Check Scanner @ {round(self.airport.env.now, 2)} minutes")
             time_in_system.append(round(self.airport.env.now, 2) - self.arrival_time)
 
-    # def _create_process_dispose(self, resource):
-    #     service_name, service_time = self._determine_resource(resource)
-    #     #print(f"ARRIVAL: Passenger {self.name} Arrives to {service_name} @ {self.arrival_time} minutes")
-    #     with resource.request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (dispose)
-    #         yield request  # Entity Requests Resource (create)
-    #         # self._calculate_resource_wait_times(service_name)
-    #         #print(f"SERVICED: Passenger {self.name} is being served @ {round(self.airport.env.now, 2)} minutes")
-    #         yield env.process(service_time)  # Resource is Serving the Entity (process)
-    #         #print(f"DEPARTURE: Passenger {self.name} Departs {service_name} @ {round(self.airport.env.now, 2)} minutes")
-    #         self._calculate_system_times(service_name)
-
-    # def _determine_resource(self, resource):
-    #     service_name = "Personal Check Scanner"
-    #     service_time = self.airport.personal_check_service_time()
-    #     if resource == self.airport.boarding_check:
-    #         service_name = "Boarding Check"
-    #         service_time = self.airport.boarding_check_service_time()
-    #     return service_name, service_time
-
     def _decision_block(self):
-        minq = 0
+        minq = 1
         for i in range(1, PERSONAL_CHECK_SCANNERS + 1):
             if len(self.airport.personal_check_scanner[i].queue) < len(self.airport.personal_check_scanner[minq].queue):
                 minq = i
         return minq
-
-    # def _calculate_resource_wait_times(self, service_name):
-    #     if service_name == "Personal Check Scanner":
-    #         personal_check_wait_times.append(self.airport.env.now - self.arrival_time)
-    #     else:
-    #         boarding_check_wait_times.append(self.airport.env.now - self.arrival_time)
-
-    # def _calculate_system_times(self, service_name):
-    #     if service_name == "Personal Check Scanner":
-    #         time_in_system.append(self.airport.env.now - self.arrival_time)
 
 
 def passenger_generator(env):
@@ -110,7 +78,7 @@ def passenger_generator(env):
     passenger_name = 1
     airport = AirPort(env)
     while True:
-        yield env.timeout(np.random.exponential(1 / PASSENGERS_PER_MINUTE))
+        yield env.timeout(np.random.exponential(PASSENGERS_PER_MINUTE))
         passenger = Passenger(passenger_name, airport)
         env.process(passenger.go_to_airport())
         passenger_name += 1
@@ -118,8 +86,6 @@ def passenger_generator(env):
 
 
 for i in range(1, REPLICATIONS + 1):
-    # print(f"REPLICATION {i}")
-
     np.random.seed(i + 1)
     env = simpy.Environment()
     env.process(passenger_generator(env))
@@ -130,7 +96,7 @@ print("---------------------Output Analysis-----------------------")
 headers = ['Avg Boarding Check Wait Time',
            'Avg Personal Check Wait Time',
            'Avg Total Wait Time',
-           'Avg Rep Time in System']
+           'Avg Time in System']
 
 average_wait_times = (np.mean(boarding_check_wait_times) + np.mean(personal_check_wait_times)) / 2
 data = np.array([
