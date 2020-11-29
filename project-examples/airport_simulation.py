@@ -49,29 +49,27 @@ class Passenger:
     def __init__(self, name, airport):
         self.name = name
         self.airport = airport
-        self.arrival_time = round(self.airport.env.now, 2)
+        self.airport_arrival_time = round(self.airport.env.now, 2)
 
     def go_to_airport(self):
         with self.airport.boarding_check.request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (dispose)
             yield request  # Entity Requests Resource (create)
-            tIn = self.airport.env.now
-            boarding_check_wait_times.append(round(tIn, 2) - self.arrival_time)
+            time_in = self.airport.env.now
+            boarding_check_wait_times.append(round(time_in, 2) - self.airport_arrival_time)
             yield env.process(self.airport.boarding_check_service_time())  # Resource is Serving the Entity (process)
-            tOut = self.airport.env.now
-            boarding_check_service_times.append(tOut - tIn)  # calculate total time for passenger to be checked
+            boarding_check_service_times.append(self.airport.env.now - time_in)  # calculate total time for passenger to be checked
 
         available_scanner = self._decision_block()  # Decision block to determine which scanner to go to
         personal_check_arrival = round(self.airport.env.now, 2)
         with self.airport.personal_check_scanner[available_scanner].request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (dispose)
             yield request  # Entity Requests Resource (create)
-            tIn = self.airport.env.now
-            personal_check_wait_times.append(round(self.airport.env.now, 2) - personal_check_arrival)
+            time_in = self.airport.env.now
+            personal_check_wait_times.append(round(time_in, 2) - personal_check_arrival)
             yield env.process(self.airport.personal_check_service_time())  # Resource is Serving the Entity (process)
-            tOut = self.airport.env.now
-            personal_check_service_times.append(tOut - tIn)  # calculate total time for passenger to be checked
+            personal_check_service_times.append(self.airport.env.now - time_in)  # calculate total time for passenger to be checked
 
-        timeLeave = self.airport.env.now
-        time_in_system.append(timeLeave - self.arrival_time)  # calculate total time in system for passenger
+        left_airport = self.airport.env.now
+        time_in_system.append(left_airport - self.airport_arrival_time)  # calculate total time in system for passenger
 
     def _decision_block(self):
         minq = 1
@@ -92,7 +90,7 @@ def passenger_generator(env):
 
 
 for i in range(1, REPLICATIONS + 1):
-    np.random.seed(i + 1)
+    np.random.seed(i)
     env = simpy.Environment()
     env.process(passenger_generator(env))
     env.run(until=RUN_TIME_MINUTES)
