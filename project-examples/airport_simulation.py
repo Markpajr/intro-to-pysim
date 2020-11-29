@@ -52,24 +52,29 @@ class Passenger:
         self.airport_arrival_time = round(self.airport.env.now, 2)
 
     def go_to_airport(self):
-        with self.airport.boarding_check.request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (dispose)
-            yield request  # Entity Requests Resource (create)
-            time_in = self.airport.env.now
-            boarding_check_wait_times.append(round(time_in, 2) - self.airport_arrival_time)
-            yield env.process(self.airport.boarding_check_service_time())  # Resource is Serving the Entity (process)
-            boarding_check_service_times.append(self.airport.env.now - time_in)  # calculate total time for passenger to be checked
+        yield from self._create_process_dispose(self.airport.boarding_check,
+                                                boarding_check_wait_times,
+                                                self.airport_arrival_time,
+                                                self.airport.boarding_check_service_time(),
+                                                boarding_check_service_times)
 
         available_scanner = self._decision_block()  # Decision block to determine which scanner to go to
-        personal_check_arrival = round(self.airport.env.now, 2)
-        with self.airport.personal_check_scanner[available_scanner].request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (dispose)
+        yield from self._create_process_dispose(self.airport.personal_check_scanner[available_scanner],
+                                                personal_check_wait_times,
+                                                round(self.airport.env.now, 2),
+                                                self.airport.personal_check_service_time(),
+                                                personal_check_service_times)
+
+        departed_airport = self.airport.env.now
+        time_in_system.append(departed_airport - self.airport_arrival_time)  # calculate total time in system for passenger
+
+    def _create_process_dispose(self, resource, wait_times, arrival_time, service_rate, service_times):
+        with resource.request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (dispose)
             yield request  # Entity Requests Resource (create)
             time_in = self.airport.env.now
-            personal_check_wait_times.append(round(time_in, 2) - personal_check_arrival)
-            yield env.process(self.airport.personal_check_service_time())  # Resource is Serving the Entity (process)
-            personal_check_service_times.append(self.airport.env.now - time_in)  # calculate total time for passenger to be checked
-
-        left_airport = self.airport.env.now
-        time_in_system.append(left_airport - self.airport_arrival_time)  # calculate total time in system for passenger
+            wait_times.append(round(time_in, 2) - arrival_time)
+            yield env.process(service_rate)  # Resource is Serving the Entity (process)
+            service_times.append(self.airport.env.now - time_in)  # calculate total time for passenger to be checked
 
     def _decision_block(self):
         minq = 1
