@@ -74,17 +74,17 @@ class Passenger:
         yield from self._create_process_dispose(self.airport.personal_check_scanner[available_scanner],
                                                 "personal_check", round(self.airport.env.now, 2))
 
-        departed_airport = self.airport.env.now
+        departed_airport = round(self.airport.env.now, 2)
         time_in_system.append(departed_airport - self.airport_arrival_time)  # Calculate Time in System
 
     def _create_process_dispose(self, resource, name, arrival_time):
         resources = self.airport.get_resources()
         with resource.request() as request:  # Automatically Disposes Entity, Releases Resource when Finished (Dispose)
             yield request  # Entity Requests Resource (Create)
-            time_in = self.airport.env.now
-            resources[name]["wait_times"].append(round(time_in, 2) - arrival_time)
+            time_in = round(self.airport.env.now, 2)
+            resources[name]["wait_times"].append(time_in - arrival_time)
             yield env.process(resources[name]["service_rate"])  # Resource is Serving the Entity (Process)
-            resources[name]["service_times"].append(self.airport.env.now - time_in)  # Calculate Service Rates
+            resources[name]["service_times"].append(round(self.airport.env.now, 2) - time_in)  # Calculate Service Rates
 
     def _decision_block(self):
         minq = 1
@@ -112,21 +112,19 @@ for i in range(1, REPLICATIONS + 1):
 
 
 print("---------------------Output Analysis-----------------------")
-headers = ['Avg Boarding Check Wait',
-           'Avg Personal Check Wait',
-           'Avg Boarding Check Service Rate',
-           'Avg Personal Check Service Rate',
-           'Avg Wait Time',
-           'Avg Time in System']
+average_wait_times = np.mean([np.mean(boarding_check_wait_times), np.mean(personal_check_wait_times)])
+min_average_wait_times = np.sum([np.min(boarding_check_wait_times), np.min(personal_check_wait_times)])
+max_average_wait_times = np.sum([np.max(boarding_check_wait_times), np.max(personal_check_wait_times)])
 
-average_wait_times = (np.mean(boarding_check_wait_times) + np.mean(personal_check_wait_times)) / 2
-data = np.array([
-    round(np.mean(boarding_check_wait_times), 2),
-    round(np.mean(personal_check_wait_times), 2),
-    round(np.mean(boarding_check_service_times), 2),
-    round(np.mean(personal_check_service_times), 2),
-    round(average_wait_times, 2),
-    round(np.mean(time_in_system), 2)
-])
+table = [
+    ['Boarding Check Wait', round(np.mean(boarding_check_wait_times), 2), round(np.min(boarding_check_wait_times), 2), round(np.max(boarding_check_wait_times), 2)],
+    ['Personal Check Wait', round(np.mean(personal_check_wait_times), 2), round(np.min(personal_check_wait_times), 2), round(np.max(personal_check_wait_times), 2)],
+    ['Boarding Check Service Rate', round(np.mean(boarding_check_service_times), 2), round(np.min(boarding_check_service_times), 2), round(np.max(boarding_check_service_times), 2)],
+    ['Personal Check Service Rate', round(np.mean(personal_check_service_times), 2), round(np.min(personal_check_service_times), 2), round(np.max(personal_check_service_times), 2)],
+    ['Wait Time', round(average_wait_times, 2), round(np.min(min_average_wait_times), 2), round(np.max(max_average_wait_times), 2)],
+    ['Time in System', round(np.mean(time_in_system), 2), round(np.min(time_in_system), 2), round(np.max(time_in_system), 2)]
+]
 
-print(tabulate([data], headers, tablefmt="fancy_grid"))
+headers = ["", "Avg Total (Minutes)", "Min", "Max"]
+
+print(tabulate(table, headers, tablefmt="fancy_grid"))
