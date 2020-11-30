@@ -112,21 +112,17 @@ for i in range(1, REPLICATIONS + 1):
 
 
 print("---------------------Output Analysis-----------------------")
-headers = ['Avg Boarding Check Wait',
-           'Avg Personal Check Wait',
-           'Avg Boarding Check Service Rate',
-           'Avg Personal Check Service Rate',
-           'Avg Wait Time',
-           'Avg Time in System']
+average_wait_times = np.mean([np.mean(boarding_check_wait_times), np.mean(personal_check_wait_times)])
 
-average_wait_times = (np.mean(boarding_check_wait_times) + np.mean(personal_check_wait_times)) / 2
-data = np.array([
-    round(np.mean(boarding_check_wait_times), 2),
-    round(np.mean(personal_check_wait_times), 2),
-    round(np.mean(boarding_check_service_times), 2),
-    round(np.mean(personal_check_service_times), 2),
-    round(average_wait_times, 2),
-    round(np.mean(time_in_system), 2)
-])
+table = [
+    ['Avg Boarding Check Wait', round(np.mean(boarding_check_wait_times), 2)],
+    ['Avg Personal Check Wait', round(np.mean(personal_check_wait_times), 2)],
+    ['Avg Boarding Check Service Rate', round(np.mean(boarding_check_service_times), 2)],
+    ['Avg Personal Check Service Rate', round(np.mean(personal_check_service_times), 2)],
+    ['Avg Wait Time', round(average_wait_times, 2)],
+    ['Avg Time in System', round(np.mean(time_in_system), 2)]
+]
 
-print(tabulate([data], headers, tablefmt="fancy_grid"))
+headers = ["", "Total (Minutes)"]
+
+print(tabulate(table, headers, tablefmt="fancy_grid"))
